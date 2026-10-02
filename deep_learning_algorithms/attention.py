@@ -47,3 +47,34 @@ def causal_mask(tokens: int) -> np.ndarray:
     if tokens < 1:
         raise ValueError("tokens must be positive")
     return np.tril(np.ones((tokens, tokens), dtype=bool))
+
+
+def scaled_dot_product_attention_backward(
+    query: np.ndarray,
+    key: np.ndarray,
+    value: np.ndarray,
+    grad_context: np.ndarray,
+    mask: np.ndarray = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return gradients for query, key, and value inputs.
+
+    Uses the softmax Jacobian-vector product without constructing the full
+    Jacobian. Masked key positions receive zero score gradient.
+    """
+    query = np.asarray(query, dtype=float)
+    key = np.asarray(key, dtype=float)
+    value = np.asarray(value, dtype=float)
+    grad_context = np.asarray(grad_context, dtype=float)
+    context, weights = scaled_dot_product_attention(query, key, value, mask)
+    if grad_context.shape != context.shape:
+        raise ValueError(f"grad_context must have shape {context.shape}")
+
+    grad_weights = grad_context @ np.swapaxes(value, -1, -2)
+    grad_value = np.swapaxes(weights, -1, -2) @ grad_context
+    grad_scores = weights * (
+        grad_weights - np.sum(grad_weights * weights, axis=-1, keepdims=True)
+    )
+    scale = np.sqrt(query.shape[-1])
+    grad_query = grad_scores @ key / scale
+    grad_key = np.swapaxes(grad_scores, -1, -2) @ query / scale
+    return grad_query, grad_key, grad_value
