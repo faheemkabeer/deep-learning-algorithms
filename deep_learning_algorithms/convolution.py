@@ -50,3 +50,45 @@ def conv2d(
                 patch, kernels, axes=([1, 2, 3], [1, 2, 3])
             ) + bias
     return output
+
+
+def conv2d_backward(
+    x: np.ndarray,
+    kernels: np.ndarray,
+    grad_output: np.ndarray,
+    stride: int = 1,
+    padding: int = 0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Backpropagate through ``conv2d``.
+
+    Return gradients for input, kernels, and one bias per output channel.
+    Gradients are summed over the batch; the upstream loss controls averaging.
+    """
+    x = np.asarray(x, dtype=float)
+    kernels = np.asarray(kernels, dtype=float)
+    grad_output = np.asarray(grad_output, dtype=float)
+    expected = conv2d(x, kernels, stride=stride, padding=padding).shape
+    if grad_output.shape != expected:
+        raise ValueError(f"grad_output must have shape {expected}")
+
+    kh, kw = kernels.shape[2:]
+    padded = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)))
+    grad_padded = np.zeros_like(padded)
+    grad_kernels = np.zeros_like(kernels)
+    grad_bias = grad_output.sum(axis=(0, 2, 3))
+
+    for row in range(grad_output.shape[2]):
+        for col in range(grad_output.shape[3]):
+            h, w = row * stride, col * stride
+            patch = padded[:, :, h : h + kh, w : w + kw]
+            upstream = grad_output[:, :, row, col]
+            grad_kernels += np.tensordot(upstream, patch, axes=([0], [0]))
+            grad_padded[:, :, h : h + kh, w : w + kw] += np.tensordot(
+                upstream, kernels, axes=([1], [0])
+            )
+
+    if padding:
+        grad_input = grad_padded[:, :, padding:-padding, padding:-padding]
+    else:
+        grad_input = grad_padded
+    return grad_input, grad_kernels, grad_bias

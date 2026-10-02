@@ -7,7 +7,7 @@ Small, readable NumPy implementations of core deep learning building blocks. The
 - Activation functions and losses
 - Dense layers and backpropagation
 - SGD and Adam optimizers
-- 2D convolution
+- 2D convolution with input, filter, and bias gradients
 - Scaled dot product attention
 - XOR training example and unit tests
 
