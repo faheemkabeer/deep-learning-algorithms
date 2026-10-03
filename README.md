@@ -9,6 +9,7 @@ Small, readable NumPy implementations of core deep learning building blocks. The
 - SGD and Adam optimizers
 - 2D convolution with input, filter, and bias gradients
 - Max pooling with backward gradient routing
+- Batch normalization with running statistics and backward gradients
 - Scaled dot product attention with query, key, and value gradients
 - XOR training example and unit tests
 
