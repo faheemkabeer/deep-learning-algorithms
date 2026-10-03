@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deep_learning_algorithms.activations import softmax
 from deep_learning_algorithms.layers import MLP
 from deep_learning_algorithms.losses import softmax_cross_entropy
-from deep_learning_algorithms.optimizers import Adam
+from deep_learning_algorithms.optimizers import Adam, clip_grad_norm
 
 
 def train_xor(steps: int = 1000) -> tuple[MLP, float]:
@@ -24,6 +24,7 @@ def train_xor(steps: int = 1000) -> tuple[MLP, float]:
         logits = network.forward(inputs)
         _, grad_logits = softmax_cross_entropy(logits, labels)
         network.backward(grad_logits)
+        clip_grad_norm(network.parameters_and_gradients(), max_norm=1.0)
         optimizer.step(network.parameters_and_gradients())
 
     logits = network.forward(inputs)

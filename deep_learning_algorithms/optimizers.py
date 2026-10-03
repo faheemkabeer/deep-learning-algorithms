@@ -8,6 +8,28 @@ import numpy as np
 ParameterGradients = Iterable[tuple[np.ndarray, np.ndarray]]
 
 
+def clip_grad_norm(parameters: ParameterGradients, max_norm: float) -> float:
+    """Scale all gradients together when their combined L2 norm is too large.
+
+    Gradients are modified in place and the original norm is returned. Apply
+    this after backpropagation and before an optimizer step.
+    """
+    if max_norm <= 0:
+        raise ValueError("max_norm must be positive")
+    pairs = list(parameters)
+    for parameter, gradient in pairs:
+        if parameter.shape != gradient.shape:
+            raise ValueError("parameter and gradient shapes differ")
+        if not np.all(np.isfinite(gradient)):
+            raise ValueError("gradients must be finite")
+    total_norm = float(np.sqrt(sum(np.sum(gradient**2) for _, gradient in pairs)))
+    if total_norm > max_norm:
+        scale = max_norm / total_norm
+        for _, gradient in pairs:
+            gradient *= scale
+    return total_norm
+
+
 class SGD:
     """Plain stochastic gradient descent, optionally with momentum."""
 
