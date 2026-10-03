@@ -10,6 +10,7 @@ Small, readable NumPy implementations of core deep learning building blocks. The
 - 2D convolution with input, filter, and bias gradients
 - Max pooling with backward gradient routing
 - Batch normalization with running statistics and backward gradients
+- Dropout regularization for MLP hidden layers (`training=False` disables it)
 - Scaled dot product attention with query, key, and value gradients
 - XOR training example and unit tests
 

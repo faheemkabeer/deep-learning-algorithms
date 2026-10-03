@@ -3,6 +3,7 @@
 import numpy as np
 
 from .activations import relu, relu_derivative
+from .regularization import Dropout
 
 
 class Dense:
@@ -48,29 +49,32 @@ class Dense:
 class MLP:
     """Dense network with ReLU hidden layers and raw output logits."""
 
-    def __init__(self, sizes: list[int], seed: int = 0):
+    def __init__(self, sizes: list[int], seed: int = 0, dropout: float = 0.0):
         if len(sizes) < 2:
             raise ValueError("sizes must include input and output dimensions")
         rng = np.random.default_rng(seed)
         self.layers = [Dense(a, b, rng) for a, b in zip(sizes[:-1], sizes[1:])]
+        self.dropouts = [Dropout(dropout, seed + index + 1) for index in range(len(sizes) - 2)]
         self._hidden_pre_activations = []
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         self._hidden_pre_activations = []
-        for layer in self.layers[:-1]:
+        for layer, dropout in zip(self.layers[:-1], self.dropouts):
             x = layer.forward(x)
             self._hidden_pre_activations.append(x)
-            x = relu(x)
+            x = dropout.forward(relu(x), training=training)
         return self.layers[-1].forward(x)
 
     def backward(self, grad_logits: np.ndarray) -> np.ndarray:
         if len(self._hidden_pre_activations) != len(self.layers) - 1:
             raise RuntimeError("call forward before backward")
         grad = self.layers[-1].backward(grad_logits)
-        for layer, pre_activation in zip(
-            reversed(self.layers[:-1]), reversed(self._hidden_pre_activations)
+        for layer, pre_activation, dropout in zip(
+            reversed(self.layers[:-1]),
+            reversed(self._hidden_pre_activations),
+            reversed(self.dropouts),
         ):
-            grad = layer.backward(grad * relu_derivative(pre_activation))
+            grad = layer.backward(dropout.backward(grad) * relu_derivative(pre_activation))
         return grad
 
     def parameters_and_gradients(self):
