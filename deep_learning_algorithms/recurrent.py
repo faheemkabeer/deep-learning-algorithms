@@ -96,3 +96,100 @@ class LSTM:
         """Yield trainable parameters with their latest gradients."""
         yield self.weight, self.grad_weight
         yield self.bias, self.grad_bias
+
+
+class GRU:
+    """Batch-first GRU layer with one output vector per time step.
+
+    The update and reset gates use the convention ``h = (1-z)*h_prev +
+    z*candidate``. Inputs and outputs are shaped ``(batch, time, features)``.
+    """
+
+    def __init__(self, input_size: int, hidden_size: int, seed: int = 0):
+        if input_size < 1 or hidden_size < 1:
+            raise ValueError("input_size and hidden_size must be positive")
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        rng = np.random.default_rng(seed)
+        scale = np.sqrt(1 / (input_size + hidden_size))
+        self.weight = rng.uniform(-scale, scale, (input_size + hidden_size, 3 * hidden_size))
+        self.bias = np.zeros(3 * hidden_size)
+        self.grad_weight = np.zeros_like(self.weight)
+        self.grad_bias = np.zeros_like(self.bias)
+        self._cache = None
+        self._input_shape = None
+
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """Run a sequence with a zero initial hidden state."""
+        x = np.asarray(x, dtype=float)
+        if x.ndim != 3 or x.shape[2] != self.input_size:
+            raise ValueError("x must have shape (batch, time, input_size)")
+        batch, steps, _ = x.shape
+        hidden = np.zeros((batch, self.hidden_size))
+        outputs = np.empty((batch, steps, self.hidden_size))
+        cache = []
+        for step in range(steps):
+            inputs = np.concatenate((x[:, step], hidden), axis=1)
+            gates = inputs @ self.weight + self.bias
+            update_gate, reset_gate, candidate_input = np.split(gates, 3, axis=1)
+            update_gate = _sigmoid(update_gate)
+            reset_gate = _sigmoid(reset_gate)
+            candidate_pre = candidate_input
+            # The candidate sees x and the reset-modulated previous hidden state.
+            candidate_inputs = np.concatenate((x[:, step], reset_gate * hidden), axis=1)
+            candidate_pre = candidate_inputs @ self.weight[:, 2 * self.hidden_size:] + self.bias[2 * self.hidden_size:]
+            candidate = np.tanh(candidate_pre)
+            previous_hidden = hidden
+            hidden = (1 - update_gate) * hidden + update_gate * candidate
+            outputs[:, step] = hidden
+            cache.append((inputs, candidate_inputs, update_gate, reset_gate, candidate, previous_hidden))
+        self._cache = cache
+        self._input_shape = x.shape
+        return outputs
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Backpropagate through time and return the gradient with respect to x."""
+        if self._cache is None or self._input_shape is None:
+            raise RuntimeError("call forward before backward")
+        grad_output = np.asarray(grad_output, dtype=float)
+        expected = (self._input_shape[0], self._input_shape[1], self.hidden_size)
+        if grad_output.shape != expected:
+            raise ValueError("grad_output must match the forward output shape")
+        batch, steps, _ = self._input_shape
+        grad_x = np.zeros(self._input_shape)
+        grad_hidden = np.zeros((batch, self.hidden_size))
+        self.grad_weight.fill(0)
+        self.grad_bias.fill(0)
+        for step in range(steps - 1, -1, -1):
+            inputs, candidate_inputs, update_gate, reset_gate, candidate, previous_hidden = self._cache[step]
+            grad_hidden += grad_output[:, step]
+            grad_update = grad_hidden * (candidate - previous_hidden)
+            grad_candidate = grad_hidden * update_gate
+            grad_previous = grad_hidden * (1 - update_gate)
+            grad_candidate_pre = grad_candidate * (1 - candidate**2)
+            grad_candidate_inputs = grad_candidate_pre @ self.weight[:, 2 * self.hidden_size:].T
+            grad_x_step = grad_candidate_inputs[:, : self.input_size]
+            grad_reset = grad_candidate_inputs[:, self.input_size:] * previous_hidden
+            grad_previous += grad_candidate_inputs[:, self.input_size:] * reset_gate
+            grad_reset_pre = grad_reset * reset_gate * (1 - reset_gate)
+            grad_gate_inputs = np.concatenate((
+                grad_update * update_gate * (1 - update_gate),
+                grad_reset_pre,
+                np.zeros_like(grad_candidate_pre),
+            ), axis=1)
+            self.grad_weight += inputs.T @ grad_gate_inputs
+            self.grad_bias += grad_gate_inputs.sum(axis=0)
+            grad_inputs = grad_gate_inputs @ self.weight.T
+            self.grad_weight += candidate_inputs.T @ np.concatenate(
+                (np.zeros_like(grad_candidate_pre), np.zeros_like(grad_candidate_pre), grad_candidate_pre), axis=1
+            )
+            self.grad_bias[2 * self.hidden_size:] += grad_candidate_pre.sum(axis=0)
+            grad_x_step += grad_inputs[:, : self.input_size]
+            grad_hidden = grad_previous + grad_inputs[:, self.input_size:]
+            grad_x[:, step] = grad_x_step
+        return grad_x
+
+    def parameters_and_gradients(self):
+        """Yield trainable parameters with their latest gradients."""
+        yield self.weight, self.grad_weight
+        yield self.bias, self.grad_bias

@@ -14,6 +14,7 @@ Small, readable NumPy implementations of core deep learning building blocks. The
 - Dropout regularization for MLP hidden layers (`training=False` disables it)
 - Scaled dot product attention with query, key, and value gradients
 - LSTM sequence layer with explicit backpropagation through time
+- GRU sequence layer with explicit backpropagation through time
 - XOR training example and unit tests
 
 ## Setup
@@ -25,6 +26,6 @@ python -m unittest discover -s tests -v
 python examples/train_xor.py
 ```
 
-Inputs use NumPy arrays. Dense layers accept batches shaped `(batch, features)`. Convolution accepts NCHW arrays `(batch, channels, height, width)`. Attention accepts `(batch, tokens, features)`. LSTM accepts `(batch, time, features)`.
+Inputs use NumPy arrays. Dense layers accept batches shaped `(batch, features)`. Convolution accepts NCHW arrays `(batch, channels, height, width)`. Attention accepts `(batch, tokens, features)`. LSTM and GRU accept `(batch, time, features)`.
 
 The algorithms prioritize clarity over speed. See each module's docstrings for shape and numerical details.
