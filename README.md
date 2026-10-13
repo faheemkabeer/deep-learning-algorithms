@@ -8,6 +8,7 @@ Small, readable NumPy implementations of core deep learning building blocks. The
 - Dense layers and backpropagation
 - SGD and Adam optimizers
 - Global gradient norm clipping for stable training updates
+- Learning-rate schedules: step, exponential, cosine, and linear warmup
 - 2D convolution with input, filter, and bias gradients
 - Max pooling with backward gradient routing
 - Min pooling with backward gradient routing
